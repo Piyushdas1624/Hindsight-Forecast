@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yesterday's Weather</title>
+    <!-- Favicon: retro clock with backward arrow -->
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230D0D11' stroke='%23E8A849' stroke-width='5'/%3E%3Cline x1='50' y1='50' x2='50' y2='20' stroke='%23F2EDE8' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='50' y1='50' x2='26' y2='36' stroke='%23E8A849' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='3.5' fill='%23E8A849'/%3E%3Cpath d='M80 16 A38 38 0 1 0 84 24' fill='none' stroke='%23E8A849' stroke-width='3.5' stroke-linecap='round' opacity='.55'/%3E%3Cpolygon points='85,18 85,32 75,25' fill='%23E8A849' opacity='.55'/%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0D0D11;
+            --bg-elevated: #151519;
+            --card: rgba(255, 248, 235, 0.04);
+            --card-hover: rgba(255, 248, 235, 0.07);
+            --border: rgba(255, 248, 235, 0.07);
+            --fg: #F2EDE8;
+            --fg-secondary: #9A938A;
+            --muted: #5E5952;
+            --accent: #E8A849;
+            --accent-dim: rgba(232, 168, 73, 0.12);
+            --danger: #E85D4A;
+            --success: #5AB87A;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background 1s ease;
+        }
+
+        h1,
+        h2,
+        h3,
+        .display-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        #weatherCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .app-container {
+            position: relative;
+            z-index: 2;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 0 20px 60px;
+        }
+
+        /* Loading Screen */
+        #loadingScreen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background: var(--bg);
+            transition: opacity 0.6s ease, visibility 0.6s ease;
+        }
+
+        #loadingScreen.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .loading-clock {
+            font-size: 3rem;
+            color: var(--accent);
+            animation: spinBackwards 2s linear infinite;
+        }
+
+        @keyframes spinBackwards {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+
+        .loading-text {
+            margin-top: 1.5rem;
+            color: var(--fg-secondary);
+            font-size: 0.95rem;
+            letter-spacing: 0.02em;
+        }
+
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
+
+        /* Error Screen */
+        #errorScreen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99;
+            background: var(--bg);
+            padding: 40px;
+            text-align: center;
+        }
+
+        #errorScreen.hidden {
+            display: none;
+        }
+
+        #errorScreen i {
+            font-size: 3rem;
+            color: var(--danger);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Header */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: linear-gradient(to bottom, var(--bg) 60%, transparent);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+
+        .location-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 500;
+            font-size: 1.02rem;
+        }
+
+        .location-display i {
+            color: var(--accent);
+            font-size: 0.82rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .header-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--fg-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .header-btn:hover {
+            background: var(--card-hover);
+            color: var(--fg);
+            border-color: rgba(255, 248, 235, 0.15);
+        }
+
+        .header-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        /* Hourly scroll wrapper with arrows */
+        .hourly-wrapper {
+            position: relative;
+        }
+
+        .hourly-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--fg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: all 0.2s ease;
+            opacity: 0.85;
+        }
+
+        .hourly-arrow:hover {
+            background: var(--card-hover);
+            color: var(--fg);
+            border-color: rgba(255,248,235,0.2);
+            opacity: 1;
+        }
+
+        .hourly-arrow.arr-left  { left: -6px; }
+        .hourly-arrow.arr-right { right: -6px; }
+
+        .hourly-arrow.hidden { opacity: 0; pointer-events: none; }
+
+        /* Hero */
+        .hero-section {
+            text-align: center;
+            padding: 8px 0 12px;
+        }
+
+        .hero-label {
+            font-size: 0.66rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        .hero-temp {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(5rem, 18vw, 8.5rem);
+            font-weight: 300;
+            line-height: 1;
+            letter-spacing: -0.04em;
+            margin-bottom: 2px;
+            background: linear-gradient(180deg, var(--fg) 30%, var(--fg-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-condition {
+            font-size: 1.08rem;
+            color: var(--fg-secondary);
+            margin-bottom: 3px;
+        }
+
+        .hero-subtitle {
+            font-size: 0.78rem;
+            color: var(--muted);
+            font-style: italic;
+            margin-bottom: 6px;
+        }
+
+        .hero-range {
+            font-size: 0.84rem;
+            color: var(--fg-secondary);
+            font-weight: 500;
+        }
+
+        .hero-range .lo {
+            color: var(--muted);
+        }
+
+        /* Insight Card */
+        .insight-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px 18px;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            animation: fadeInUp 0.6s ease both;
+            animation-delay: 0.3s;
+        }
+
+        .insight-card i {
+            color: var(--accent);
+            font-size: 1rem;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .insight-card p {
+            font-size: 0.84rem;
+            line-height: 1.55;
+            color: var(--fg-secondary);
+        }
+
+        /* Details Grid */
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .detail-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+            opacity: 0;
+            transform: translateY(16px);
+            animation: fadeInUp 0.5s ease forwards;
+            transition: background 0.2s ease;
+        }
+
+        .detail-card:hover {
+            background: var(--card-hover);
+        }
+
+        .detail-card .detail-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 7px;
+        }
+
+        .detail-card .detail-header i {
+            color: var(--muted);
+            font-size: 0.75rem;
+        }
+
+        .detail-card .detail-header span {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+        }
+
+        .detail-card .detail-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .detail-card .detail-sarcasm {
+            font-size: 0.7rem;
+            color: var(--muted);
+            line-height: 1.4;
+            font-style: italic;
+        }
+
+        /* Hourly Section */
+        .hourly-section {
+            margin-bottom: 20px;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 0.7s;
+        }
+
+        .section-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 10px;
+            padding-left: 4px;
+        }
+
+        .hourly-scroll {
+            display: flex;
+            gap: 2px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            scroll-snap-type: x proximity;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .hourly-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hourly-item {
+            flex-shrink: 0;
+            width: 56px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            padding: 11px 4px 9px;
+            border-radius: 22px;
+            border: 1px solid transparent;
+            scroll-snap-align: start;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .hourly-item:hover {
+            background: var(--card);
+        }
+
+        .hourly-item.now-item {
+            background: var(--accent-dim);
+            border-color: rgba(232, 168, 73, 0.25);
+        }
+
+        .hourly-item .hour-time {
+            font-size: 0.66rem;
+            font-weight: 600;
+            color: var(--fg-secondary);
+            white-space: nowrap;
+        }
+
+        .hourly-item.now-item .hour-time {
+            color: var(--accent);
+        }
+
+        .hourly-item .hour-bar-track {
+            width: 4px;
+            height: 40px;
+            background: rgba(255, 248, 235, 0.05);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hourly-item .hour-bar {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            border-radius: 4px;
+            background: var(--accent);
+            opacity: 0.4;
+            transition: height 0.5s ease;
+        }
+
+        .hourly-item.now-item .hour-bar {
+            opacity: 1;
+        }
+
+        .hourly-item .hour-icon {
+            font-size: 0.78rem;
+            color: var(--fg-secondary);
+        }
+
+        .hourly-item .hour-temp {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .hourly-item .now-badge {
+            position: absolute;
+            top: 2px;
+            font-size: 0.46rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        /* Highlights */
+        .highlights-section {
+            margin-bottom: 26px;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 0.9s;
+        }
+
+        .highlight-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 13px 15px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: background 0.2s ease;
+        }
+
+        .highlight-card:hover {
+            background: var(--card-hover);
+        }
+
+        .highlight-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 11px;
+            background: var(--accent-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .highlight-content {
+            flex: 1;
+        }
+
+        .highlight-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 1px;
+        }
+
+        .highlight-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+
+        .highlight-meta {
+            font-size: 0.74rem;
+            color: var(--fg-secondary);
+        }
+
+        .highlight-sarcasm {
+            font-size: 0.68rem;
+            color: var(--muted);
+            font-style: italic;
+            margin-top: 1px;
+        }
+
+        /* Footer */
+        .app-footer {
+            text-align: center;
+            padding: 18px 0 10px;
+            border-top: 1px solid var(--border);
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 1.1s;
+        }
+
+        .app-footer p {
+            font-size: 0.74rem;
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        .app-footer .brand {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--fg-secondary);
+            font-weight: 500;
+            font-style: normal;
+        }
+
+        /* Overlay & Modal (shared) */
+        .ov {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.6);
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .ov.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .mdl {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 201;
+            max-width: 520px;
+            margin: 0 auto;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 20px 20px 0 0;
+            padding: 14px 20px 34px;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .ov.open .mdl {
+            transform: translateY(0);
+        }
+
+        .modal-handle {
+            width: 36px;
+            height: 4px;
+            background: var(--muted);
+            border-radius: 2px;
+            margin: 0 auto 14px;
+        }
+
+        /* Search */
+        .search-input-wrap {
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .search-input-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 14px 12px 40px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--fg);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.92rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-input::placeholder {
+            color: var(--muted);
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+        }
+
+        .search-results {
+            max-height: 42vh;
+            overflow-y: auto;
+        }
+
+        .search-result-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .search-result-item:hover {
+            background: var(--card);
+        }
+
+        .search-result-item:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+
+        .search-result-name {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .search-result-sub {
+            font-size: 0.74rem;
+            color: var(--muted);
+        }
+
+        .search-result-item > i {
+            color: var(--muted);
+            font-size: 0.7rem;
+        }
+
+        .search-empty {
+            padding: 18px;
+            color: var(--muted);
+            font-size: 0.84rem;
+            text-align: center;
+        }
+
+        /* Settings */
+        .settings-notice {
+            background: rgba(232, 168, 73, 0.08);
+            border: 1px solid rgba(232, 168, 73, 0.15);
+            border-radius: 10px;
+            padding: 11px 14px;
+            margin-bottom: 14px;
+            font-size: 0.76rem;
+            color: var(--accent);
+            line-height: 1.5;
+            display: none;
+        }
+
+        .settings-notice i {
+            margin-right: 6px;
+        }
+
+        .settings-group {
+            margin-bottom: 18px;
+        }
+
+        .settings-group-title {
+            font-size: 0.66rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 7px;
+        }
+
+        .settings-group-desc {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 5px;
+            line-height: 1.4;
+            font-style: italic;
+        }
+
+        /* Segmented control */
+        .seg {
+            display: flex;
+            background: rgba(255, 248, 235, 0.04);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+
+        .seg-btn {
+            flex: 1;
+            padding: 8px 3px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'DM Sans', sans-serif;
+            white-space: nowrap;
+        }
+
+        .seg-btn.active {
+            background: var(--accent);
+            color: var(--bg);
+        }
+
+        .seg-btn:hover:not(.active) {
+            color: var(--fg-secondary);
+        }
+
+        .seg-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 11px 18px;
+            font-size: 0.82rem;
+            color: var(--fg-secondary);
+            z-index: 300;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+            max-width: 90vw;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Main app visibility */
+        #mainApp {
+            transition: opacity 0.4s ease;
+        }
+
+        #mainApp.hidden {
+            display: none;
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .loading-clock {
+                animation: none;
+            }
+        }
+
+        /* Responsive */
+        @media (min-width: 640px) {
+            .details-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .hourly-item {
+                width: 62px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Weather Effects Canvas -->
+    <canvas id="weatherCanvas" aria-hidden="true"></canvas>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen">
+        <i class="fa-regular fa-clock loading-clock" aria-hidden="true"></i>
+        <p class="loading-text">Traveling back in time<span class="loading-dots"></span></p>
+    </div>
+
+    <!-- Error Screen -->
+    <div id="errorScreen" class="hidden">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <h2 class="display-font text-xl font-semibold mb-3">Lost in Time</h2>
+        <p id="errorMessage" class="text-sm" style="color:var(--fg-secondary); max-width:300px; line-height:1.6;"></p>
+        <button onclick="location.reload()" class="mt-6 px-6 py-3 rounded-full text-sm font-semibold"
+            style="background:var(--accent); color:var(--bg);">
+            Try Again
+        </button>
+    </div>
+
+    <!-- Main App -->
+    <main id="mainApp" class="hidden">
+        <div class="app-container">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="location-display">
+                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                    <span id="locationName">Loading...</span>
+                </div>
+                <div class="header-actions">
+                    <button class="header-btn" id="refreshBtn" aria-label="Refresh" title="Re-travel to yesterday">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button class="header-btn" id="searchBtn" aria-label="Search location" title="Change location">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                    <button class="header-btn" id="settingsBtn" aria-label="Settings" title="Settings">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+            </header>
+
+
+
+            <!-- Hero -->
+            <section class="hero-section" aria-label="Past conditions">
+                <p class="hero-label" id="heroLabel">Hindsight Forecast</p>
+                <div class="hero-temp display-font" id="heroTemp" aria-live="polite">--</div>
+                <p class="hero-condition" id="heroCondition">Loading...</p>
+                <p class="hero-subtitle" id="hSub"></p>
+                <p class="hero-range" id="heroRange">H: -- L: --</p>
+            </section>
+
+            <!-- Insight Card -->
+            <section class="insight-card" aria-label="Sarcastic weather insight">
+                <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+                <p id="insightText">Analyzing yesterday's mistakes...</p>
+            </section>
+
+            <!-- Details Grid -->
+            <section class="details-grid" id="detailsGrid" aria-label="Weather details">
+                <!-- Populated by JS -->
+            </section>
+
+            <!-- Hourly Timeline -->
+            <section class="hourly-section" aria-label="Hourly temperature timeline">
+                <p class="section-label" id="hourlyLabel">The Day That Was</p>
+                <div class="hourly-wrapper">
+                    <button class="hourly-arrow arr-left" id="arrLeft" aria-label="Scroll left">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <div class="hourly-scroll" id="hourlyScroll" role="list">
+                        <!-- Populated by JS -->
+                    </div>
+                    <button class="hourly-arrow arr-right" id="arrRight" aria-label="Scroll right">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Highlights -->
+            <section class="highlights-section" aria-label="Yesterday's highlights">
+                <p class="section-label">Yesterday's Highlights</p>
+                <div id="highlightsContainer">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer class="app-footer">
+                <p><span class="brand">Yesterday's Weather</span> — Because the future is too uncertain.</p>
+            </footer>
+        </div>
+    </main>
+
+    <!-- Search Overlay -->
+    <div class="ov" id="searchOverlay" role="dialog" aria-modal="true" aria-label="Search for a city">
+        <div class="mdl">
+            <div class="modal-handle"></div>
+            <div class="search-input-wrap">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search any city..."
+                    autocomplete="off" aria-label="City name">
+            </div>
+            <div class="search-results" id="searchResults" role="listbox">
+                <p class="search-empty">Type a city name to time-travel elsewhere.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Overlay -->
+    <div class="ov" id="settingsOverlay" role="dialog" aria-modal="true" aria-label="Settings">
+        <div class="mdl">
+            <div class="modal-handle"></div>
+            <div class="settings-notice" id="sarcasmOffNotice">
+                <i class="fa-solid fa-circle-info"></i> Sarcasm disabled. This app is now just data.
+                Boring, accurate, completely pointless data. Enjoy the void.
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Unit System</div>
+                <div class="seg" id="segUnits"></div>
+                <div class="settings-group-desc">SI for scientists. American for people who refuse to metric.
+                    CGS for contrarians. Asian for the sensible majority.</div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Time Format</div>
+                <div class="seg" id="segTimeFmt"></div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Sarcasm Level</div>
+                <div class="seg" id="segSarcasm"></div>
+                <div class="settings-group-desc">Adjust the attitude. "Off" is not recommended unless you hate joy and
+                    laughter and fun and humans.</div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Time Travel Distance</div>
+                <div class="seg" id="segOffset"></div>
+                <div class="settings-group-desc">How far back do you want to obsess over weather you cannot change?
+                    Pick your regret radius.</div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">Decimal Precision</div>
+                <div class="seg" id="segDecimal"></div>
+                <div class="settings-group-desc">For people who think 23.4 tells you something that 23 does not. It
+                    doesn't, but you do you.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+        /* ============================================================
+           STATE & PREFERENCES
+           ============================================================ */
+        const ST = { location: null, weatherData: null };
+        let P = { units: 'si', timeFmt: '12h', sarcasm: 'brutal', offset: 24, dec: 0 };
+        const PRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const LC = navigator.language || 'en-US';
+        let clockTimer = null;
+        let searchTO = null;
+
+        function loadPrefs() {
+            try {
+                const s = localStorage.getItem('yw_prefs_v2');
+                if (s) {
+                    const parsed = JSON.parse(s);
+                    for (const k in parsed) {
+                        if (Object.prototype.hasOwnProperty.call(parsed, k)) P[k] = parsed[k];
+                    }
+                } else {
+                    // Auto-detect unit preference from locale
+                    if (LC === 'en-US') P.units = 'american';
+                    else if (['ja', 'zh', 'ko', 'zh-CN', 'zh-TW'].some(l => LC.startsWith(l))) P.units = 'asian';
+                }
+            } catch (e) { }
+        }
+
+        function savePrefs() { try { localStorage.setItem('yw_prefs_v2', JSON.stringify(P)); } catch (e) { } }
+
+        function setPref(key, value) {
+            P[key] = value;
+            savePrefs();
+            const notice = document.getElementById('sarcasmOffNotice');
+            if (notice) notice.style.display = P.sarcasm === 'off' ? 'block' : 'none';
+        }
+
+        /* ============================================================
+           UNIT SYSTEMS
+           ============================================================ */
+        const UNIT_SYSTEMS = {
+            si: {
+                tSym: '\u00B0C', wSym: 'km/h', pSym: 'mm', prSym: 'hPa', vSym: 'km',
+                tc: c => c, wc: k => k, pc: m => m, prc: h => h, vc: k => k
+            },
+            american: {
+                tSym: '\u00B0F', wSym: 'mph', pSym: 'in', prSym: 'inHg', vSym: 'mi',
+                tc: c => c * 9 / 5 + 32, wc: k => k * 0.621371, pc: m => m * 0.03937, prc: h => h * 0.02953, vc: k => k * 0.621371
+            },
+            cgs: {
+                tSym: '\u00B0C', wSym: 'cm/s', pSym: 'cm', prSym: 'mbar', vSym: 'm',
+                tc: c => c, wc: k => k * 27.778, pc: m => m / 10, prc: h => h, vc: k => k * 1000
+            },
+            asian: {
+                tSym: '\u00B0C', wSym: 'm/s', pSym: 'mm', prSym: 'hPa', vSym: 'm',
+                tc: c => c, wc: k => k / 3.6, pc: m => m, prc: h => h, vc: k => k * 1000
+            }
+        };
+
+        function un() { return UNIT_SYSTEMS[P.units] || UNIT_SYSTEMS.si; }
+        function fR(n, d) { if (n == null || isNaN(n)) return '--'; return Number(n).toFixed(d); }
+        function fT(c) { if (c == null) return '--\u00B0'; return fR(un().tc(c), P.dec) + un().tSym; }
+        function fTU(c) { if (c == null) return '--'; return fR(un().tc(c), P.dec) + un().tSym; }
+        function fW(k) { if (k == null) return '--'; return fR(un().wc(k), P.dec) + ' ' + un().wSym; }
+        function fP(m) { if (m == null) return '--'; return fR(un().pc(m), P.dec + 1) + ' ' + un().pSym; }
+        function fPr(h) { if (h == null) return '--'; return fR(un().prc(h), P.dec + 1) + ' ' + un().prSym; }
+        function fV(k) { if (k == null) return '--'; return fR(un().vc(k), P.dec + 1) + ' ' + un().vSym; }
+
+        function fHr(i) {
+            const h = i % 24;
+            if (P.timeFmt === '24h') return String(h).padStart(2, '0') + ':00';
+            if (h === 0) return '12 AM';
+            if (h === 12) return '12 PM';
+            return h < 12 ? h + ' AM' : (h - 12) + ' PM';
+        }
+
+        function fHs(i) {
+            const h = i % 24;
+            if (P.timeFmt === '24h') return String(h).padStart(2, '0');
+            if (h === 0) return '12 AM';
+            if (h === 12) return '12 PM';
+            return h < 12 ? h + ' AM' : (h - 12) + ' PM';
+        }
+
+        /* ============================================================
+           WEATHER CODES
+           ============================================================ */
+        const WEATHER_INFO = {
+            0: { label: 'Clear Sky', icon: 'fa-solid fa-sun', bg: 'clear' },
+            1: { label: 'Mainly Clear', icon: 'fa-solid fa-sun', bg: 'clear' },
+            2: { label: 'Partly Cloudy', icon: 'fa-solid fa-cloud-sun', bg: 'pcloudy' },
+            3: { label: 'Overcast', icon: 'fa-solid fa-cloud', bg: 'cloudy' },
+            45: { label: 'Fog', icon: 'fa-solid fa-smog', bg: 'fog' },
+            48: { label: 'Rime Fog', icon: 'fa-solid fa-smog', bg: 'fog' },
+            51: { label: 'Light Drizzle', icon: 'fa-solid fa-cloud-rain', bg: 'drizzle' },
+            53: { label: 'Drizzle', icon: 'fa-solid fa-cloud-rain', bg: 'drizzle' },
+            55: { label: 'Heavy Drizzle', icon: 'fa-solid fa-cloud-rain', bg: 'drizzle' },
+            56: { label: 'Freezing Drizzle', icon: 'fa-solid fa-cloud-rain', bg: 'drizzle' },
+            57: { label: 'Freezing Drizzle', icon: 'fa-solid fa-cloud-rain', bg: 'drizzle' },
+            61: { label: 'Light Rain', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            63: { label: 'Rain', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            65: { label: 'Heavy Rain', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            66: { label: 'Freezing Rain', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            67: { label: 'Freezing Rain', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            71: { label: 'Light Snow', icon: 'fa-solid fa-snowflake', bg: 'snow' },
+            73: { label: 'Snow', icon: 'fa-solid fa-snowflake', bg: 'snow' },
+            75: { label: 'Heavy Snow', icon: 'fa-solid fa-snowflake', bg: 'snow' },
+            77: { label: 'Snow Grains', icon: 'fa-solid fa-snowflake', bg: 'snow' },
+            80: { label: 'Light Showers', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            81: { label: 'Showers', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            82: { label: 'Heavy Showers', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'rain' },
+            85: { label: 'Snow Showers', icon: 'fa-solid fa-snowflake', bg: 'snow' },
+            86: { label: 'Heavy Snow Showers', icon: 'fa-solid fa-snowflake', bg: 'snow' },
+            95: { label: 'Thunderstorm', icon: 'fa-solid fa-cloud-bolt', bg: 'thunder' },
+            96: { label: 'Thunderstorm + Hail', icon: 'fa-solid fa-cloud-bolt', bg: 'thunder' },
+            99: { label: 'Thunderstorm + Hail', icon: 'fa-solid fa-cloud-bolt', bg: 'thunder' }
+        };
+
+        const BG_GRADIENTS = {
+            clear: 'radial-gradient(ellipse at 50% 0%,rgba(232,168,73,.14) 0%,transparent 55%),linear-gradient(180deg,#1A1510,#0D0D11)',
+            pcloudy: 'radial-gradient(ellipse at 50% 0%,rgba(190,170,130,.09) 0%,transparent 55%),linear-gradient(180deg,#15140F,#0D0D11)',
+            cloudy: 'radial-gradient(ellipse at 50% 0%,rgba(150,145,135,.07) 0%,transparent 55%),linear-gradient(180deg,#131312,#0D0D11)',
+            fog: 'radial-gradient(ellipse at 50% 30%,rgba(180,170,150,.09) 0%,transparent 65%),linear-gradient(180deg,#16150F,#0D0D11)',
+            drizzle: 'radial-gradient(ellipse at 50% 0%,rgba(130,135,140,.08) 0%,transparent 55%),linear-gradient(180deg,#111213,#0D0D11)',
+            rain: 'radial-gradient(ellipse at 50% 0%,rgba(110,115,125,.1) 0%,transparent 55%),linear-gradient(180deg,#0F1012,#0D0D11)',
+            snow: 'radial-gradient(ellipse at 50% 0%,rgba(200,200,215,.09) 0%,transparent 55%),linear-gradient(180deg,#141416,#0D0D11)',
+            thunder: 'radial-gradient(ellipse at 50% 0%,rgba(90,65,40,.14) 0%,transparent 55%),linear-gradient(180deg,#0E0D0B,#0D0D11)'
+        };
+
+        function wI(c) { return WEATHER_INFO[c] || WEATHER_INFO[0]; }
+
+        /* ============================================================
+           SETTINGS CONFIG
+           ============================================================ */
+        const SETTINGS_DEF = {
+            sarcasm: [{ v: 'off', l: 'Off' }, { v: 'mild', l: 'Mild' }, { v: 'medium', l: 'Medium' }, { v: 'brutal', l: 'Brutal' }],
+            units: [{ v: 'si', l: 'SI' }, { v: 'american', l: 'American' }, { v: 'cgs', l: 'CGS' }, { v: 'asian', l: 'Asian' }],
+            timeFmt: [{ v: '12h', l: '12 Hour' }, { v: '24h', l: '24 Hour' }],
+            offset: [{ v: 24, l: '24h' }, { v: 48, l: '48h' }, { v: 72, l: '72h' }, { v: 168, l: '1 Week' }, { v: 720, l: '1 Month' }],
+            dec: [{ v: 0, l: 'Rounded' }, { v: 1, l: '1 Decimal' }]
+        };
+
+        const SEG_MAP = {
+            sarcasm: 'segSarcasm',
+            units: 'segUnits',
+            timeFmt: 'segTimeFmt',
+            offset: 'segOffset',
+            dec: 'segDecimal'
+        };
+
+        function buildSegments() {
+            for (const key in SEG_MAP) {
+                if (!Object.prototype.hasOwnProperty.call(SEG_MAP, key)) continue;
+                const el = document.getElementById(SEG_MAP[key]);
+                if (!el) continue;
+                el.innerHTML = '';
+                SETTINGS_DEF[key].forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'seg-btn' + (String(P[key]) === String(opt.v) ? ' active' : '');
+                    btn.textContent = opt.l;
+                    btn.dataset.k = key;
+                    btn.dataset.v = String(opt.v);
+                    btn.addEventListener('click', function () {
+                        const nk = this.dataset.k;
+                        const nv = this.dataset.v;
+                        const numV = isNaN(Number(nv)) ? nv : Number(nv);
+                        setPref(nk, numV);
+                        el.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        if (nk === 'offset') { showLoading(); initWeather(); }
+                        else if (ST.weatherData) renderAll();
+                    });
+                    el.appendChild(btn);
+                });
+            }
+        }
+
+        /* ============================================================
+           UTILS
+           ============================================================ */
+        function tgtDate() { const d = new Date(); d.setDate(d.getDate() - P.offset / 24); return d; }
+        function tgtDateStr() { return tgtDate().toISOString().split('T')[0]; }
+        function curHr() { return new Date().getHours(); }
+        function safeGet(arr, i, fb = null) { if (!arr || i < 0 || i >= arr.length || arr[i] == null) return fb; return arr[i]; }
+        function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2800);
+        }
+
+        function showLoading() {
+            document.getElementById('loadingScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('errorScreen').classList.add('hidden');
+        }
+
+        function showMain() {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            document.getElementById('errorScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+        }
+
+        function showError(msg) {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('errorScreen').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = msg;
+            wAnStop();
+        }
+
+        function offsetLabel() {
+            if (P.offset === 24) return 'Exactly 24 hours ago';
+            if (P.offset === 48) return 'Exactly 48 hours ago';
+            if (P.offset === 72) return 'Exactly 72 hours ago';
+            if (P.offset === 168) return 'Exactly one week ago';
+            if (P.offset === 720) return 'Exactly one month ago';
+            return P.offset + ' hours ago';
+        }
+
+        function hourlyLabel() {
+            if (P.offset === 24) return 'The Day That Was';
+            if (P.offset === 48) return 'Two Days Ago';
+            if (P.offset === 72) return 'Three Days Ago';
+            if (P.offset === 168) return 'One Week Ago';
+            if (P.offset === 720) return 'One Month Ago';
+            return 'The Past';
+        }
+
+        function heroLabel() {
+            if (P.offset === 24) return 'Hindsight Forecast';
+            if (P.offset === 48) return 'Double Hindsight';
+            if (P.offset === 168) return 'Weekly Hindsight';
+            if (P.offset === 720) return 'Monthly Hindsight';
+            return 'Ancient Hindsight';
+        }
+
+        /* ============================================================
+           LIVE CLOCK
+           ============================================================ */
+        function fmtClockTime() {
+            const now = new Date();
+            const h = now.getHours(), mi = now.getMinutes(), s = now.getSeconds();
+            if (P.timeFmt === '24h') {
+                return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            }
+            const ap = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            return h12 + ':' + String(mi).padStart(2, '0') + ':' + String(s).padStart(2, '0') + ' ' + ap;
+        }
+
+        function updateHSub() {
+            const el = document.getElementById('hSub');
+            if (!el) return;
+            const yd = tgtDate();
+            const dateStr = yd.toLocaleDateString(LC, { weekday: 'long', month: 'long', day: 'numeric' });
+            el.innerHTML = offsetLabel() + ' \u2014 ' + dateStr + ' <span style="color:var(--accent);font-variant-numeric:tabular-nums;font-style:normal">&middot; ' + fmtClockTime() + '</span>';
+        }
+
+        function startClock() {
+            if (clockTimer) clearInterval(clockTimer);
+            updateHSub();
+            clockTimer = setInterval(updateHSub, 1000);
+        }
+
+        /* ============================================================
+           API
+           ============================================================ */
+        async function fetchLocationByIP() {
+            try {
+                const res = await fetch('https://ipwho.is/');
+                if (!res.ok) throw 0;
+                const data = await res.json();
+                if (!data.success) throw 0;
+                return { name: data.city || 'Unknown', lat: data.latitude, lon: data.longitude, country: data.country, region: data.region };
+            } catch (e) {
+                try {
+                    const res2 = await fetch('https://ipapi.co/json/');
+                    if (!res2.ok) throw 0;
+                    const data2 = await res2.json();
+                    return { name: data2.city || 'Unknown', lat: data2.latitude, lon: data2.longitude, country: data2.country_name, region: data2.region };
+                } catch (e2) { return null; }
+            }
+        }
+
+        async function fetchWeather(lat, lon) {
+            const d = tgtDateStr();
+            const params = `latitude=${lat}&longitude=${lon}&start_date=${d}&end_date=${d}&hourly=temperature_2m,relativehumidity_2m,apparent_temperature,precipitation,weathercode,windspeed_10m,surface_pressure,visibility&timezone=auto`;
+            const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?${params}`);
+            if (!res.ok) throw new Error('API ' + res.status);
+            const data = await res.json();
+            if (!data.hourly || !data.hourly.time) throw new Error('Bad data');
+            return data;
+        }
+
+        async function searchCity(q) {
+            if (!q || q.trim().length < 2) return [];
+            const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q.trim())}&count=6&language=en`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.results || [];
+        }
+
+        /* ============================================================
+           CANVAS WEATHER ANIMATION
+           ============================================================ */
+        const wAnCanvas = document.getElementById('weatherCanvas');
+        const wAnCtx = wAnCanvas.getContext('2d');
+        let wAnPs = [], wAnWc = 0, wAnFo = 0, wAnAi = null;
+
+        function wAnRz() { wAnCanvas.width = window.innerWidth; wAnCanvas.height = window.innerHeight; }
+        wAnRz();
+        window.addEventListener('resize', wAnRz);
+
+        function wAnSet(code) {
+            wAnWc = code; wAnPs = []; wAnFo = 0;
+            if (PRM) return;
+            const W = wAnCanvas.width, H = wAnCanvas.height, c = code;
+            const isR = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82].indexOf(c) !== -1;
+            const isS = [71, 73, 75, 77, 85, 86].indexOf(c) !== -1;
+            const isF = [45, 48].indexOf(c) !== -1;
+            let i, n;
+            if (isR || c >= 95) {
+                n = Math.min(180, Math.floor(W * H / 5000));
+                for (i = 0; i < n; i++) wAnPs.push({ t: 'r', x: Math.random() * W * 1.2 - W * 0.1, y: Math.random() * H, sp: 10 + Math.random() * 14, ln: 18 + Math.random() * 28, op: 0.06 + Math.random() * 0.18, wd: -2 + Math.random() * -3 });
+            }
+            if (isS) {
+                n = Math.min(120, Math.floor(W * H / 8000));
+                for (i = 0; i < n; i++) wAnPs.push({ t: 's', x: Math.random() * W, y: Math.random() * H, sp: 0.6 + Math.random() * 1.8, rd: 1.2 + Math.random() * 3, dr: (Math.random() - 0.5) * 1.2, op: 0.2 + Math.random() * 0.4, wb: Math.random() * Math.PI * 2 });
+            }
+            if (isF) {
+                for (i = 0; i < 15; i++) wAnPs.push({ t: 'f', x: Math.random() * W * 1.5 - W * 0.25, y: H * 0.1 + Math.random() * H * 0.8, sp: 0.2 + Math.random() * 0.4, w: 250 + Math.random() * 500, h: 60 + Math.random() * 120, op: 0.015 + Math.random() * 0.035 });
+            }
+            if (!isR && !isS && !isF) {
+                for (i = 0; i < 25; i++) wAnPs.push({ t: 'a', x: Math.random() * W, y: Math.random() * H, sp: 0.15 + Math.random() * 0.35, rd: 0.8 + Math.random() * 1.8, dr: (Math.random() - 0.5) * 0.3, op: 0.06 + Math.random() * 0.12, pu: Math.random() * Math.PI * 2 });
+            }
+        }
+
+        function wAnAnim() {
+            const W = wAnCanvas.width, H = wAnCanvas.height;
+            wAnCtx.clearRect(0, 0, W, H);
+            if (wAnWc >= 95 && wAnFo > 0) {
+                wAnCtx.fillStyle = 'rgba(255,248,230,' + wAnFo + ')';
+                wAnCtx.fillRect(0, 0, W, H);
+                wAnFo *= 0.88;
+                if (wAnFo < 0.005) wAnFo = 0;
+            }
+            if (wAnWc >= 95 && Math.random() < 0.003) wAnFo = 0.15 + Math.random() * 0.2;
+            for (let j = 0; j < wAnPs.length; j++) {
+                const p = wAnPs[j];
+                if (p.t === 'r') {
+                    p.x += p.wd; p.y += p.sp;
+                    if (p.y > H + p.ln) { p.y = -p.ln; p.x = Math.random() * W * 1.2 - W * 0.1; }
+                    wAnCtx.beginPath(); wAnCtx.moveTo(p.x, p.y); wAnCtx.lineTo(p.x + p.wd * 1.5, p.y + p.ln);
+                    wAnCtx.strokeStyle = 'rgba(180,195,210,' + p.op + ')'; wAnCtx.lineWidth = 1; wAnCtx.stroke();
+                } else if (p.t === 's') {
+                    p.wb += 0.015; p.x += p.dr + Math.sin(p.wb) * 0.5; p.y += p.sp;
+                    if (p.y > H + p.rd * 2) { p.y = -p.rd * 2; p.x = Math.random() * W; }
+                    if (p.x < -10) p.x = W + 10; if (p.x > W + 10) p.x = -10;
+                    wAnCtx.beginPath(); wAnCtx.arc(p.x, p.y, Math.max(0.5, p.rd), 0, Math.PI * 2);
+                    wAnCtx.fillStyle = 'rgba(220,225,235,' + p.op + ')'; wAnCtx.fill();
+                } else if (p.t === 'f') {
+                    p.x += p.sp; if (p.x > W + p.w) p.x = -p.w;
+                    wAnCtx.beginPath(); wAnCtx.ellipse(p.x, p.y, Math.max(1, p.w / 2), Math.max(1, p.h / 2), 0, 0, Math.PI * 2);
+                    wAnCtx.fillStyle = 'rgba(200,195,180,' + p.op + ')'; wAnCtx.fill();
+                } else if (p.t === 'a') {
+                    p.pu += 0.012; p.x += p.dr; p.y -= p.sp;
+                    if (p.y < -10) { p.y = H + 10; p.x = Math.random() * W; }
+                    const o = 0.5 + Math.sin(p.pu) * 0.5;
+                    wAnCtx.beginPath(); wAnCtx.arc(p.x, p.y, Math.max(0.3, p.rd), 0, Math.PI * 2);
+                    wAnCtx.fillStyle = 'rgba(232,168,73,' + (p.op * o) + ')'; wAnCtx.fill();
+                }
+            }
+            wAnAi = requestAnimationFrame(wAnAnim);
+        }
+
+        function wAnStart() { wAnStop(); wAnAnim(); }
+        function wAnStop() { if (wAnAi) { cancelAnimationFrame(wAnAi); wAnAi = null; } }
+
+        /* ============================================================
+           SARCASM ENGINE
+           ============================================================ */
+        const SARCASM_LEVEL = { off: 0, mild: 1, medium: 2, brutal: 3 };
+        function sLv() { return SARCASM_LEVEL[P.sarcasm] || 0; }
+
+        function generateInsight(h) {
+            const sl = sLv();
+            const t = h.temperature_2m || [], pr = h.precipitation || [], co = h.weathercode || [], wi = h.windspeed_10m || [];
+            if (!t.length) return 'No weather data found. That day may have refused to be measured.';
+
+            let mx = -999, mn = 999, tp = 0, mw = 0;
+            for (let i = 0; i < t.length; i++) { if (t[i] != null) { if (t[i] > mx) mx = t[i]; if (t[i] < mn) mn = t[i]; } }
+            for (let i = 0; i < pr.length; i++) tp += (pr[i] || 0);
+            for (let i = 0; i < wi.length; i++) { if (wi[i] != null && wi[i] > mw) mw = wi[i]; }
+            const rn = mx - mn;
+
+            let hasR = false, hasS = false, hasT = false, hasCl = false, hasFog = false, overcastHrs = 0;
+            const rainC = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82];
+            const snowC = [71, 73, 75, 77, 85, 86];
+            for (let i = 0; i < co.length; i++) {
+                const c = co[i]; if (c == null) continue;
+                if (rainC.indexOf(c) !== -1) hasR = true;
+                if (snowC.indexOf(c) !== -1) hasS = true;
+                if (c >= 95) hasT = true;
+                if (c <= 1) hasCl = true;
+                if (c === 45 || c === 48) hasFog = true;
+                if (c === 3) overcastHrs++;
+            }
+            const overcast = overcastHrs > 12;
+
+            if (sl === 0) {
+                const parts = ['High of ' + fTU(mx) + ', low of ' + fTU(mn) + '.'];
+                if (tp > 0) parts.push('Total precipitation: ' + fP(tp) + '.');
+                else parts.push('No precipitation recorded.');
+                if (hasT) parts.push('Thunderstorm activity detected.');
+                return parts.join(' ');
+            }
+
+            const pool = [];
+
+            if (hasT) {
+                if (sl >= 2) pool.push('The sky threw a tantrum with actual lightning. Dramatic. Unnecessary. Relatable.');
+                if (sl >= 3) pool.push('Lightning struck somewhere. Statistically it was not you. But we cannot be 100% sure.');
+                if (sl >= 3) pool.push('Thunderstorms. The weather equivalent of sending an email in ALL CAPS with a "per my last email."');
+                if (sl >= 1) pool.push('Thunderstorms rolled through. Quite dramatic for a random Tuesday.');
+            }
+            if (hasS) {
+                if (sl >= 1) pool.push('Snow fell. A rare meteorological event that you probably underappreciated.');
+                if (sl >= 2) pool.push("It snowed. If you didn't build a snowman, throw a snowball, or even look outside, what were you even doing?");
+                if (sl >= 3) pool.push("Snow happened and you probably complained about it instead of enjoying it. Classic you.");
+                if (sl >= 3) pool.push("Snow fell from the sky and you were probably too busy doomscrolling to notice. The snowflakes forgive you. We don't.");
+                if (sl >= 2) pool.push("A winter wonderland outside, you inside, staring at a screen. We are not judging. We are absolutely judging.");
+            }
+            if (hasR && tp > 5) {
+                if (sl >= 1) pool.push('Heavy rain recorded. ' + fP(tp) + ' total precipitation.');
+                if (sl >= 2) pool.push(fP(tp) + ' of rain. Your shoes were wet. Your mood was worse. We have reconstructed the scene of the crime.');
+                if (sl >= 3) pool.push(fP(tp) + ' of rain fell. Everything was damp, everyone was annoyed, and the puddles were personally targeting you.');
+                if (sl >= 3) pool.push('It rained ' + fP(tp) + '. That is the kind of rain where even your umbrella filed a formal complaint with HR.');
+            } else if (hasR && tp > 0) {
+                if (sl >= 1) pool.push('Light rain recorded. ' + fP(tp) + ' total.');
+                if (sl >= 2) pool.push("A bit of drizzle — just enough to make you question the umbrella, not enough to justify it.");
+                if (sl >= 3) pool.push("Light rain. The universe was crying, but only a little. Like watching a sad commercial with one tear.");
+            }
+            if (hasFog) {
+                if (sl >= 1) pool.push('Foggy conditions reduced visibility.');
+                if (sl >= 2) pool.push('Thick fog rolled in. Visibility dropped. Much like your life choices.');
+                if (sl >= 3) pool.push('Fog so thick you could barely see your regrets. Which, to be fair, were right in front of you the whole time.');
+            }
+            if (overcast && !hasR) {
+                if (sl >= 2) pool.push("Overcast all day. The sky was having a melancholy day and made sure everyone knew it.");
+                if (sl >= 3) pool.push("Grey skies from morning to night. The weather equivalent of a passive-aggressive read receipt.");
+            }
+            if (mx > 38) {
+                if (sl >= 2) pool.push('Hit ' + fTU(mx) + '. That is the kind of heat where even your shadow was looking for shade.');
+                if (sl >= 3) pool.push(fTU(mx) + '. You could fry an egg on the sidewalk. You didn\'t, because you were too busy complaining about the heat from inside your air-conditioned room.');
+            } else if (mx > 32) {
+                if (sl >= 2) pool.push('A scorching ' + fTU(mx) + '. Perfect weather for literally anything, which makes it worse that you did nothing.');
+                if (sl >= 3) pool.push(fTU(mx) + ' and sunny. People pay thousands for this on vacation. You got it free and spent it indoors.');
+            } else if (mx > 25) {
+                if (sl >= 2) pool.push('A warm ' + fTU(mx) + '. Lovely weather that you spent entirely indoors, almost certainly.');
+                if (sl >= 3) pool.push(fTU(mx) + ' and sunny. You know who else would have loved this? Everyone who was outside. Which you weren\'t.');
+            }
+            if (mn < -10) {
+                if (sl >= 2) pool.push('Plunged to ' + fTU(mn) + '. Your past self was freezing, and there is absolutely nothing you can do about it now.');
+                if (sl >= 3) pool.push(fTU(mn) + '. At that temperature, going outside counted as an extreme sport. You stayed in. Smart, but cowardly.');
+            } else if (mn < 0) {
+                if (sl >= 2) pool.push('Below freezing at ' + fTU(mn) + '. The kind of cold that makes you question all your life choices, starting with where you live.');
+                if (sl >= 3) pool.push(fTU(mn) + '. Your pipes were fine probably. Your motivation to exist outdoors definitely was not.');
+            } else if (mx < 8) {
+                if (sl >= 2) pool.push('Topped out at ' + fTU(mx) + '. Brisk. Chilly. "Fresh" is just a polite word for uncomfortable.');
+                if (sl >= 3) pool.push(fTU(mx) + '. Cold enough to see your breath. Not cold enough for any sympathy.');
+            }
+            if (mw > 50) {
+                if (sl >= 2) pool.push('Winds gusted to ' + fW(mw) + '. Umbrellas did not stand a chance. Neither did your hair.');
+                if (sl >= 3) pool.push(fW(mw) + ' wind gusts. Your hair looked like abstract expressionism. Not the good kind.');
+            } else if (mw > 30) {
+                if (sl >= 2) pool.push('Winds hit ' + fW(mw) + '. Noticeable enough to be annoying, not strong enough to be impressive.');
+                if (sl >= 3) pool.push(fW(mw) + ' wind. The kind where you pretend to enjoy the breeze while secretly hating every second of it.');
+            }
+            if (rn > 18) {
+                if (sl >= 2) pool.push('Temperature swung ' + fTU(rn) + ' throughout the day. Yesterday could not even commit to a single season.');
+                if (sl >= 3) pool.push(fTU(rn) + ' temperature swing. Yesterday dressed for four seasons simultaneously and pulled none of them off.');
+            } else if (rn > 12) {
+                if (sl >= 3) pool.push(fTU(rn) + ' range. Layering was required. You probably got it wrong. You always get it wrong.');
+            }
+            if (hasCl && !hasR && !hasS && !hasT && !hasFog) {
+                if (sl >= 2) pool.push('Clear skies for most of the day. Perfect visibility that you almost certainly did not take advantage of.');
+                if (sl >= 3) pool.push("Not a cloud in the sky. Nature served you a masterpiece and you probably looked at your phone instead.");
+                if (sl >= 3) pool.push("Crystal clear skies. Somewhere, a meteorologist wept because nobody took a single photo of it.");
+            }
+            if (!hasR && !hasS && !hasT && !hasFog && mx >= 15 && mx <= 26 && rn < 10) {
+                if (sl >= 3) pool.push("Aggressively pleasant weather. Mild, calm, uneventful. The most boring weather possible — and yet here you are, reading about it.");
+            }
+            if (tp === 0 && !hasS) {
+                if (sl >= 2) pool.push("Zero precipitation. Not a single drop. The sky was withholding and you did not even notice.");
+                if (sl >= 3) pool.push("Not a single drop of moisture fell from the sky. The clouds were on strike. Honestly, good for them.");
+            }
+            if (sl >= 1) pool.push('Weather happened. It had temperature, humidity, and everything. A complete and total weather experience.');
+            if (sl >= 3) pool.push("We analyzed the atmospheric conditions in excruciating detail. The result? It was a day. With weather. Groundbreaking stuff.");
+            if (sl >= 3) pool.push("The barometric pressure did things. The humidity existed. The wind moved air molecules around. You noticed none of it.");
+            if (sl >= 2) pool.push("An unremarkable day, meteorologically speaking. Which is fitting, really.");
+            if (sl >= 3) pool.push("Yesterday's weather has been fully archived. Unlike your plans, which were not followed through either.");
+
+            return pick(pool);
+        }
+
+        function detailSarcasm(type, val) {
+            const sl = sLv();
+            if (sl === 0) return '';
+            if (type === 'feelsLike') {
+                if (sl >= 3) return val != null ? 'What you felt was exactly what it was. Now feel nostalgic about a temperature.' : 'Unknown discomfort level.';
+                if (sl >= 2) return 'The temperature your body actually experienced. Too late to dress differently.';
+                return '';
+            }
+            if (type === 'humidity') {
+                if (val == null) return sl >= 2 ? 'Moisture status: classified.' : '';
+                if (val > 85) { if (sl >= 3) return 'The air was basically soup.'; if (sl >= 2) return 'Extremely humid. Everything was damp including your soul.'; return 'Very humid.'; }
+                if (val > 65) { if (sl >= 3) return 'Humid enough to ruin your hair. Which it probably did.'; if (sl >= 2) return 'Noticeably humid.'; return 'Humid.'; }
+                if (val > 35) { if (sl >= 3) return 'Normal humidity. How aggressively boring.'; return ''; }
+                if (sl >= 3) return 'Your skin was cracking. Your moisturizer quit.';
+                if (sl >= 2) return 'Very dry. Your skin filed a formal complaint.';
+                return 'Very dry.';
+            }
+            if (type === 'wind') {
+                if (val == null) return sl >= 2 ? 'Wind status: still a mystery.' : '';
+                if (val > 40) { if (sl >= 3) return 'Hat removal guaranteed. Umbrella survival: unlikely.'; if (sl >= 2) return 'Strong gusts. Anything loose became a projectile.'; return 'Strong winds.'; }
+                if (val > 20) { if (sl >= 3) return 'Mildly disruptive. Just enough to mess up your hair and your day.'; if (sl >= 2) return 'Moderate wind.'; return 'Moderate wind.'; }
+                if (sl >= 3) return 'Not even a breeze to blame for your bad mood.';
+                if (sl >= 2) return 'Calm. Nothing to blame your bad hair on.';
+                return 'Calm.';
+            }
+            if (type === 'precipitation') {
+                if (val == null || val === 0) { if (sl >= 3) return 'Bone dry. Like your social life.'; if (sl >= 2) return 'Zero precipitation.'; return ''; }
+                if (val < 0.5) { if (sl >= 3) return 'Technically it rained. Technically.'; if (sl >= 2) return 'Trace amounts. Barely worth a complaint.'; return 'Trace.'; }
+                if (sl >= 3) return fP(val) + ' of regret, delivered from above.';
+                if (sl >= 2) return fP(val) + '. Enough to be inconvenient.';
+                return fP(val) + ' total.';
+            }
+            if (type === 'pressure') {
+                if (val == null) return sl >= 2 ? 'Pressure: unknown.' : '';
+                if (val > 1025) { if (sl >= 3) return 'High pressure. The atmosphere was feeling smug.'; if (sl >= 2) return 'Above normal pressure.'; return 'High.'; }
+                if (val < 1000) { if (sl >= 3) return 'Low pressure. The atmosphere was having a full existential crisis.'; if (sl >= 2) return 'Below normal pressure.'; return 'Low.'; }
+                if (sl >= 3) return 'Average pressure. The atmosphere phoned it in.';
+                return 'Normal.';
+            }
+            if (type === 'visibility') {
+                if (val == null) return sl >= 2 ? "Visibility: couldn't even see the data." : '';
+                if (val < 2000) { if (sl >= 3) return "You couldn't see much yesterday either."; if (sl >= 2) return 'Poor visibility.'; return 'Poor.'; }
+                if (val < 8000) { if (sl >= 3) return 'Slightly murky. Like your memories.'; if (sl >= 2) return 'Reduced visibility.'; return 'Moderate.'; }
+                if (sl >= 3) return 'Crystal clear. Almost certainly wasted on you.';
+                if (sl >= 2) return 'Excellent visibility. You probably looked at the ground.';
+                return 'Excellent.';
+            }
+            return '';
+        }
+
+        function highlightSarcasm(type, val) {
+            const sl = sLv();
+            if (sl === 0) return '';
+            const h = {
+                warmest: sl >= 3 ? 'Peak warmth. Already fading into the irretrievable past.' : sl >= 2 ? 'The warmest it got.' : 'Highest recorded temperature.',
+                coldest: sl >= 3 ? 'The low point. Literally and existentially.' : sl >= 2 ? 'The coldest hour.' : 'Lowest recorded temperature.',
+                wettest: sl >= 3 ? 'Maximum dampness. Maximum regret.' : sl >= 2 ? 'Most rain in one hour.' : 'Wettest hour.',
+                windiest_strong: sl >= 3 ? 'Umbrella destruction confirmed. Hats: deceased.' : sl >= 2 ? 'Strong enough to ruin your plans.' : 'Peak wind speed.',
+                windiest_weak: sl >= 3 ? 'Wind existed. Barely. Like a polite suggestion.' : sl >= 2 ? 'Notable wind.' : 'Peak wind speed.',
+                moodswings: sl >= 3 ? "Yesterday couldn't decide what it wanted to be. Deeply relatable." : sl >= 2 ? 'The weather changed its mind repeatedly.' : 'Multiple conditions.',
+                dryspell: sl >= 3 ? 'Not a single drop for hours. Your umbrella was embarrassed.' : sl >= 2 ? 'An extended dry period.' : 'Longest dry stretch.'
+            };
+            return h[type] || '';
+        }
+
+        /* ============================================================
+           RENDER
+           ============================================================ */
+        function renderHero() {
+            const d = ST.weatherData, hr = d.hourly, ch = curHr();
+            const cTemp = safeGet(hr.temperature_2m, ch);
+            const cCode = safeGet(hr.weathercode, ch, 0);
+            const info = wI(cCode);
+            let mx = -999, mn = 999;
+            for (let i = 0; i < hr.temperature_2m.length; i++) {
+                if (hr.temperature_2m[i] != null) {
+                    if (hr.temperature_2m[i] > mx) mx = hr.temperature_2m[i];
+                    if (hr.temperature_2m[i] < mn) mn = hr.temperature_2m[i];
+                }
+            }
+            document.getElementById('locationName').textContent = ST.location.name;
+            document.getElementById('heroLabel').textContent = heroLabel();
+            const el = document.getElementById('heroTemp');
+            if (cTemp != null) {
+                const st = performance.now(), dur = 900;
+                function tick(now) {
+                    const prog = Math.min((now - st) / dur, 1);
+                    const eased = 1 - Math.pow(1 - prog, 3);
+                    const cv = cTemp * eased;
+                    el.textContent = fR(un().tc(cv), P.dec) + un().tSym;
+                    if (prog < 1) requestAnimationFrame(tick);
+                }
+                requestAnimationFrame(tick);
+            } else { el.textContent = '--'; }
+            document.getElementById('heroCondition').textContent = info.label;
+            // hSub is kept live by startClock() — just call it immediately here
+            updateHSub();
+            document.getElementById('heroRange').innerHTML = 'H: ' + fT(mx) + ' <span class="lo">L: ' + fT(mn) + '</span>';
+            document.title = "Yesterday's Weather \u2014 " + fT(cTemp) + ' in ' + ST.location.name;
+            document.body.style.background = BG_GRADIENTS[info.bg] || BG_GRADIENTS.clear;
+            wAnSet(cCode);
+            wAnStart();
+            startClock();
+        }
+
+        function renderInsight() {
+            document.getElementById('insightText').textContent = generateInsight(ST.weatherData.hourly);
+        }
+
+        function renderDetails() {
+            const hr = ST.weatherData.hourly, ch = curHr();
+            const fl = safeGet(hr.apparent_temperature, ch);
+            const hu = safeGet(hr.relativehumidity_2m, ch);
+            const wi = safeGet(hr.windspeed_10m, ch);
+            const pr = safeGet(hr.surface_pressure, ch);
+            const vi = safeGet(hr.visibility, ch);
+            let tp = 0; for (let i = 0; i < hr.precipitation.length; i++) tp += (hr.precipitation[i] || 0);
+            const cards = [
+                { icon: 'fa-solid fa-temperature-half', label: 'Feels Like', val: fTU(fl), type: 'feelsLike', v: fl },
+                { icon: 'fa-solid fa-droplet', label: 'Humidity', val: hu != null ? Math.round(hu) + '%' : '--', type: 'humidity', v: hu },
+                { icon: 'fa-solid fa-wind', label: 'Wind', val: fW(wi), type: 'wind', v: wi },
+                { icon: 'fa-solid fa-cloud-rain', label: 'Precipitation', val: tp > 0 ? fP(tp) : '0 ' + un().pSym, type: 'precipitation', v: tp },
+                { icon: 'fa-solid fa-gauge-high', label: 'Pressure', val: fPr(pr), type: 'pressure', v: pr },
+                { icon: 'fa-solid fa-eye', label: 'Visibility', val: fV(vi), type: 'visibility', v: vi }
+            ];
+            const grid = document.getElementById('detailsGrid');
+            grid.innerHTML = cards.map(function (c, idx) {
+                return '<div class="detail-card" style="animation-delay:' + (0.4 + idx * 0.07) + 's"><div class="detail-header"><i class="' + c.icon + '" aria-hidden="true"></i><span>' + c.label + '</span></div><div class="detail-value">' + c.val + '</div><div class="detail-sarcasm">' + detailSarcasm(c.type, c.v) + '</div></div>';
+            }).join('');
+        }
+
+        function renderHourly() {
+            const hr = ST.weatherData.hourly;
+            const temps = hr.temperature_2m || [], codes = hr.weathercode || [], precips = hr.precipitation || [];
+            const ch = curHr();
+            if (!temps.length) return;
+            let mx = -999, mn = 999;
+            for (let i = 0; i < temps.length; i++) {
+                if (temps[i] != null) { if (temps[i] > mx) mx = temps[i]; if (temps[i] < mn) mn = temps[i]; }
+            }
+            const range = mx - mn || 1;
+            document.getElementById('hourlyLabel').textContent = hourlyLabel();
+            const scroll = document.getElementById('hourlyScroll');
+            scroll.innerHTML = temps.map(function (temp, idx) {
+                const isN = idx === ch;
+                const bH = temp != null ? Math.max(8, ((temp - mn) / range) * 100) : 50;
+                const info = wI(safeGet(codes, idx, 0));
+                const pr = safeGet(precips, idx, 0);
+                return '<div class="hourly-item' + (isN ? ' now-item' : '') + '" role="listitem">' +
+                    (isN ? '<span class="now-badge">Now</span>' : '') +
+                    '<span class="hour-time">' + fHs(idx) + '</span>' +
+                    '<div class="hour-bar-track"><div class="hour-bar" style="height:' + bH + '%"></div></div>' +
+                    '<i class="' + info.icon + ' hour-icon" aria-hidden="true"></i>' +
+                    '<span class="hour-temp">' + fT(temp) + '</span>' +
+                    (pr > 0 ? '<span style="font-size:.55rem;color:var(--accent);margin-top:-3px">' + fP(pr) + '</span>' : '') +
+                    '</div>';
+            }).join('');
+            requestAnimationFrame(function () {
+                const ni = scroll.querySelector('.now-item');
+                if (ni) scroll.scrollTo({ left: ni.offsetLeft - scroll.offsetWidth / 2 + ni.offsetWidth / 2, behavior: 'smooth' });
+            });
+        }
+
+        function renderHighlights() {
+            const hr = ST.weatherData.hourly;
+            const temps = hr.temperature_2m || [], winds = hr.windspeed_10m || [], precips = hr.precipitation || [], codes = hr.weathercode || [];
+            const cont = document.getElementById('highlightsContainer');
+            if (!temps.length) { cont.innerHTML = ''; return; }
+            let hls = [];
+            let mx = -999, mn = 999, mxi = 0, mni = 0, mw = 0, mwi = 0, mp = 0, mpi = 0;
+            for (let i = 0; i < temps.length; i++) {
+                if (temps[i] != null) { if (temps[i] > mx) { mx = temps[i]; mxi = i; } if (temps[i] < mn) { mn = temps[i]; mni = i; } }
+                if (winds[i] != null && winds[i] > mw) { mw = winds[i]; mwi = i; }
+                if ((precips[i] || 0) > mp) { mp = precips[i]; mpi = i; }
+            }
+            hls.push({ icon: 'fa-solid fa-temperature-arrow-up', label: 'Warmest Moment', val: fTU(mx), meta: fHr(mxi), sarc: highlightSarcasm('warmest') });
+            hls.push({ icon: 'fa-solid fa-temperature-arrow-down', label: 'Coldest Moment', val: fTU(mn), meta: fHr(mni), sarc: highlightSarcasm('coldest') });
+            if (mp > 0) { hls.push({ icon: 'fa-solid fa-droplet', label: 'Wettest Hour', val: fP(mp), meta: fHr(mpi), sarc: highlightSarcasm('wettest') }); }
+            hls.push({ icon: 'fa-solid fa-wind', label: 'Windiest Gust', val: fW(mw), meta: fHr(mwi), sarc: highlightSarcasm(mw > 35 ? 'windiest_strong' : 'windiest_weak') });
+            const uniq = [], seen = {};
+            for (let j = 0; j < codes.length; j++) { if (codes[j] != null && !seen[codes[j]]) { seen[codes[j]] = true; uniq.push(codes[j]); } }
+            if (uniq.length >= 4) { hls.push({ icon: 'fa-solid fa-shuffle', label: 'Mood Swings', val: uniq.length + ' conditions', meta: 'Throughout the day', sarc: highlightSarcasm('moodswings') }); }
+            let dryS = 0, maxDry = 0, drySt = 0, maxDrySt = 0;
+            for (let k = 0; k < precips.length; k++) { if ((precips[k] || 0) === 0) { if (dryS === 0) drySt = k; dryS++; if (dryS > maxDry) { maxDry = dryS; maxDrySt = drySt; } } else { dryS = 0; } }
+            if (maxDry >= 10 && maxDry < 24) { hls.push({ icon: 'fa-solid fa-sun-plant-wilt', label: 'Longest Dry Spell', val: maxDry + ' hours', meta: fHr(maxDrySt) + ' \u2013 ' + fHr((maxDrySt + maxDry) % 24), sarc: highlightSarcasm('dryspell') }); }
+            cont.innerHTML = hls.slice(0, 5).map(function (h) {
+                return '<div class="highlight-card"><div class="highlight-icon"><i class="' + h.icon + '" aria-hidden="true"></i></div><div class="highlight-content"><div class="highlight-label">' + h.label + '</div><div class="highlight-value">' + h.val + '</div><div class="highlight-meta">' + h.meta + '</div><div class="highlight-sarcasm">' + h.sarc + '</div></div></div>';
+            }).join('');
+        }
+
+        function renderAll() {
+            if (!ST.weatherData) return;
+            renderHero();
+            renderInsight();
+            renderDetails();
+            renderHourly();
+            renderHighlights();
+            showMain();
+        }
+
+        /* ============================================================
+           SEARCH MODAL
+           ============================================================ */
+        function openSearch() {
+            document.getElementById('searchOverlay').classList.add('open');
+            const inp = document.getElementById('searchInput');
+            inp.value = '';
+            document.getElementById('searchResults').innerHTML = '<p class="search-empty">Type a city name to time-travel elsewhere.</p>';
+            setTimeout(() => inp.focus(), 350);
+        }
+
+        function closeSearch() { document.getElementById('searchOverlay').classList.remove('open'); clearTimeout(searchTO); }
+
+        function handleSearch(q) {
+            const el = document.getElementById('searchResults');
+            if (!q || q.trim().length < 2) { el.innerHTML = '<p class="search-empty">Type a city name to time-travel elsewhere.</p>'; return; }
+            el.innerHTML = '<p class="search-empty"><i class="fa-solid fa-circle-notch fa-spin"></i> Searching through time...</p>';
+            searchCity(q).then(function (res) {
+                if (!res.length) { el.innerHTML = '<p class="search-empty">No cities found. Try somewhere that actually exists.</p>'; return; }
+                el.innerHTML = res.map(function (r) {
+                    return '<div class="search-result-item" role="option" tabindex="0" data-lat="' + r.latitude + '" data-lon="' + r.longitude + '" data-name="' + (r.name || '') + '" data-country="' + (r.country || '') + '" data-region="' + (r.admin1 || '') + '"><div><div class="search-result-name">' + (r.name || 'Unknown') + '</div><div class="search-result-sub">' + [r.admin1, r.country].filter(Boolean).join(', ') + '</div></div><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></div>';
+                }).join('');
+                el.querySelectorAll('.search-result-item').forEach(function (item) {
+                    function handler() { selectCity(item); }
+                    item.addEventListener('click', handler);
+                    item.addEventListener('keydown', function (e) { if (e.key === 'Enter') handler(); });
+                });
+            }).catch(function () { el.innerHTML = '<p class="search-empty">Search failed. The time machine needs servicing.</p>'; });
+        }
+
+        function selectCity(item) {
+            ST.location = { name: item.dataset.name, lat: parseFloat(item.dataset.lat), lon: parseFloat(item.dataset.lon), country: item.dataset.country, region: item.dataset.region };
+            closeSearch();
+            showToast('Time-traveling to ' + item.dataset.name + '...');
+            showLoading();
+            initWeather();
+        }
+
+        /* ============================================================
+           SETTINGS MODAL
+           ============================================================ */
+        function openSettings() {
+            document.getElementById('settingsOverlay').classList.add('open');
+            buildSegments();
+        }
+
+        function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+
+        /* ============================================================
+           EVENT LISTENERS
+           ============================================================ */
+        document.getElementById('searchBtn').addEventListener('click', openSearch);
+        document.getElementById('settingsBtn').addEventListener('click', openSettings);
+        document.getElementById('refreshBtn').addEventListener('click', function () {
+            if (!ST.location) return;
+            showToast('Re-traveling to the past...');
+            showLoading();
+            initWeather();
+        });
+        document.getElementById('searchOverlay').addEventListener('click', function (e) {
+            if (e.target === document.getElementById('searchOverlay')) closeSearch();
+        });
+        document.getElementById('settingsOverlay').addEventListener('click', function (e) {
+            if (e.target === document.getElementById('settingsOverlay')) closeSettings();
+        });
+        document.getElementById('searchInput').addEventListener('input', function (e) {
+            clearTimeout(searchTO);
+            searchTO = setTimeout(function () { handleSearch(e.target.value); }, 350);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { closeSearch(); closeSettings(); }
+        });
+
+        // Hourly scroll arrows
+        (function () {
+            const STEP = 180;
+            function updateArrows() {
+                const sc = document.getElementById('hourlyScroll');
+                const al = document.getElementById('arrLeft');
+                const ar = document.getElementById('arrRight');
+                if (!sc || !al || !ar) return;
+                al.classList.toggle('hidden', sc.scrollLeft <= 0);
+                ar.classList.toggle('hidden', sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 1);
+            }
+            document.getElementById('arrLeft').addEventListener('click', function () {
+                const sc = document.getElementById('hourlyScroll');
+                sc.scrollBy({ left: -STEP, behavior: 'smooth' });
+                setTimeout(updateArrows, 320);
+            });
+            document.getElementById('arrRight').addEventListener('click', function () {
+                const sc = document.getElementById('hourlyScroll');
+                sc.scrollBy({ left: STEP, behavior: 'smooth' });
+                setTimeout(updateArrows, 320);
+            });
+            document.getElementById('hourlyScroll').addEventListener('scroll', updateArrows, { passive: true });
+            // Initial state: hide left arrow, show right only when content overflows
+            updateArrows();
+        })();
+
+        /* ============================================================
+           INITIALIZATION
+           ============================================================ */
+        function initWeather() {
+            if (!ST.location) return;
+            fetchWeather(ST.location.lat, ST.location.lon).then(function (data) {
+                ST.weatherData = data;
+                renderAll();
+            }).catch(function () {
+                if (ST.location.name === 'Null Island') showError("We could not figure out where you were yesterday. To be fair, neither could you. Try searching for a city.");
+                else showError("Could not load weather for " + ST.location.name + ". The time machine broke down. Again.");
+            });
+        }
+
+        function init() {
+            loadPrefs();
+            buildSegments();
+            const notice = document.getElementById('sarcasmOffNotice');
+            if (notice) notice.style.display = P.sarcasm === 'off' ? 'block' : 'none';
+            fetchLocationByIP().then(function (loc) {
+                ST.location = loc || { name: 'Null Island', lat: 0, lon: 0, country: 'Atlantic Ocean', region: 'Nowhere' };
+                initWeather();
+            }).catch(function () {
+                ST.location = { name: 'Null Island', lat: 0, lon: 0, country: 'Atlantic Ocean', region: 'Nowhere' };
+                initWeather();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+
+</html>
