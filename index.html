@@ -1848,6 +1848,52 @@
             });
         }
 
+
+        /* ============================================================
+           🌈 APRIL FOOLS EASTER EGG — console only
+           Renders when DevTools is open; invisible otherwise.
+        ============================================================ */
+        (function aprilFoolsEgg() {
+            var RB = ['#FF0000','#FF4500','#FF8C00','#FFD700','#7FFF00',
+                      '#00E676','#00BCD4','#2196F3','#9C27B0','#E91E63'];
+            var title  = '✦  A p r i l   F o o l s  ✦';
+            var author = '  Made By  PIYUSHDAS1624  ';
+
+            var fmt = '', styles = [];
+            Array.from(title).forEach(function(ch, i) {
+                fmt += '%c' + ch;
+                styles.push(
+                    'color:' + RB[i % RB.length] + ';' +
+                    'font-size:22px;font-weight:900;' +
+                    'text-shadow:0 0 8px ' + RB[i % RB.length] + ';'
+                );
+            });
+
+            var afmt = '', astyles = [];
+            Array.from(author).forEach(function(ch, i) {
+                afmt += '%c' + ch;
+                astyles.push(
+                    'color:' + RB[(i + 3) % RB.length] + ';' +
+                    'font-size:13px;font-weight:700;letter-spacing:2px;'
+                );
+            });
+
+            var sep = '%c' + '─'.repeat(38);
+            var sepStyle = 'color:#555;font-size:10px;';
+
+            setTimeout(function() {
+                console.log('\n');
+                console.log.apply(console, [sep, sepStyle]);
+                console.log.apply(console, [fmt].concat(styles));
+                console.log('\n');
+                console.log.apply(console, [afmt].concat(astyles));
+                console.log.apply(console, [sep, sepStyle]);
+                console.log('%c🎉 Happy April Fool\'s Day! 🎉',
+                    'color:#FF69B4;font-size:11px;font-style:italic;');
+                console.log('\n');
+            }, 500);
+        })();
+
         document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
